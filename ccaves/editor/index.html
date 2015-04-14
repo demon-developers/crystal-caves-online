@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" >
+		<title>Map Editor v1 :: Crystal Caves</title>
+		<style type="text/css">
+			html, body {
+				margin:  0;
+				padding: 0;
+				height: 100%;
+				color: #FFFFFF;
+				background: #000000;
+				font-family: sans-serif;
+				font-size: 12px;
+			}
+			button {
+				border-radius: 5px;
+			}
+			select, input, button {
+				vertical-align: middle;
+			}
+			#menu {
+				float: left;
+				height: 100%;
+			}
+			#main {
+				left-margin: 400px;
+				height: 100%;
+				overflow: scroll;
+			}
+			#controls {
+				height: 162px;
+				padding: 12px;
+				box-sizing: border-box;
+			}
+			.controlsSection {
+				clear: both;
+				margin-bottom: 8px;
+			}
+			h1{
+				margin: 0px 0px 8px 0px;
+				font-size: 22px;
+			}
+			#layerSelection {
+				width: 120px;
+				margin-right: 4px;
+			}
+			#tiles {
+				position: relative;
+				background: #FFCCFF;
+				height: 100%;
+				margin-bottom: -162px;
+				overflow-y: scroll;
+			}
+			#tilesImage {
+				image-rendering: -moz-crisp-edges;
+				image-rendering: pixelated;
+				width: 192px;
+				height: auto;
+			}
+			#tilesSelection {
+				position: absolute;
+				left: 0px;
+				top:  0px;
+				border: 4px solid red;
+				width: 48px;
+				height: 48px;
+				box-sizing: border-box;
+			}
+			#levelCanvas {
+				position: absolute;
+				background: url(checker.png);
+			}
+			#overlayCanvas {
+				position: absolute;
+			}
+			#popupBackground {
+				display: none;
+				position: absolute;
+				left: 0px;
+				top: 0px;
+				width: 100%;
+				height: 100%;
+				background: rgba(0, 0, 0, 0.5);
+				justify-content: center;
+				align-items: center;
+			}
+			#popup {
+				padding: 12px;
+				background: #333333;
+				border-radius: 6px;
+			}
+			#popupTitle {
+				float: left;
+				margin: 0px 0px 8px 0px;
+				font-size: 18px;
+			}
+			#popupControls {
+				float: right;
+			}
+			#popupContent {
+				width: 700px;
+				height: 400px;
+				font-family: monospace;
+			}
+		</style>
+		<script src="../uber.js"></script>
+		<script type="text/javascript">
+		window.onload = function()
+		{
+			var levelData      = [];
+			var levelWidth     = 40;
+			var levelHeight    = 24;
+
+			var drawGridLines  = true;
+			var drawGridText   = true;
+
+			var tileIndex      = 1;
+			var tileWidth      = 48;
+			var tileHeight     = 48;
+			var tilesPerRow    = 4;
+
+			var tilesImage     = document.getElementById('tilesImage');
+			var tilesSelection = document.getElementById('tilesSelection');
+			var layerSelection = document.getElementById('layerSelection');
+
+			
+			tilesImage.onmousedown = function(event)
+			{
+				var tileCol = (event.offsetX / tileWidth) | 0;
+				var tileRow = (event.offsetY / tileHeight) | 0;
+				tileIndex = tileRow * tilesPerRow + tileCol + 1;
+				tilesSelection.style.left = (tileCol * tileWidth ) + 'px';
+				tilesSelection.style.top  = (tileRow * tileHeight) + 'px';
+				tilesSelection.style.visibility = 'visible';
+				event.preventDefault();
+				return false;
+			};
+
+			tilesSelection.onmousedown = function(event)
+			{
+				tilesSelection.style.visibility = 'hidden';
+				tileIndex = 0;
+				event.preventDefault();
+				return false;
+			};
+
+			var canvas     = document.createElement('canvas');
+			canvas.id      = 'levelCanvas';
+			canvas.width   = levelWidth  * tileWidth;
+			canvas.height  = levelHeight * tileHeight;
+
+			var main   = document.getElementById('main');
+			main.appendChild(canvas);
+			
+			var context = canvas.getContext('2d');
+			context.imageSmoothingEnabled = false;
+
+			var renderTile  = function(col, row, index)
+			{
+				index--;
+				var sx = ((index % tilesPerRow) | 0) * 16;
+				var sy = ((index / tilesPerRow) | 0) * 16;
+				context.drawImage(tilesImage, 
+					sx, sy, 16, 16,
+					col * tileWidth, row * tileHeight,
+					tileWidth, tileHeight);
+			};
+
+			var renderString = function(context, string, x, y, size)
+			{
+				size = (size || 11);
+				context.font = size + 'px monospace';
+				context.textBaseline = 'top';
+				context.fillStyle    = 'rgb(255, 204, 255)';
+				context.fillText(string, x + 2, y);
+			};
+
+			var renderLevel = function()
+			{
+				context.save();
+				context.clearRect(0, 0, canvas.width, canvas.height);
+
+				var floatingLayer;
+				if(drawGridText){
+					floatingLayer = createNewLayer();
+				}
+
+				for(var l = 0; l < levelData.length; l++){
+					var layer = levelData[l];
+					if(layer == undefined) continue;
+					for(var r = 0; r < levelHeight; r++){
+						var row = layer[r];
+						if(row == undefined) continue;
+						for(var c = 0; c < levelWidth; c++){
+							var index = row[c];
+							if(index == undefined || index == 0){
+								continue;
+							}
+							renderTile(c, r, index);
+							if(drawGridText){
+								floatingLayer[r][c] = index;
+							}
+						}
+					}
+				}
+
+				if(drawGridText){
+					for(var r = 0; r < levelHeight; r++){
+						for(var c = 0; c < levelWidth; c++){
+							renderString(context,
+								(c + 1) + 'x' + (r + 1), 
+								c * tileWidth, r * tileHeight);
+							var index = floatingLayer[r][c];
+							if(index == 0){
+								continue;
+							}
+							renderString(context, index,
+								c * tileWidth, r * tileHeight + 10);
+						}
+					}
+				}
+
+				if(drawGridLines){
+					context.beginPath();
+					for(var y = 0; y < canvas.height; y += tileWidth){
+						context.moveTo(0, y);
+						context.lineTo(canvas.width, y);
+					}
+					for(var x = 0; x < canvas.width; x += tileHeight){
+						context.moveTo(x, 0);
+						context.lineTo(x, canvas.height);
+					}
+					context.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+					context.lineWidth   = 2;
+					context.stroke();
+				}
+
+				context.restore();
+			};
+
+			var newFilledArray = function(len, val)
+			{
+				var rv = new Array(len);
+				while (--len >= 0) {
+					rv[len] = val;
+				}
+				return rv;
+			};
+
+			var updateLevelData = function(event)
+			{
+				if(levelData != undefined && levelData.length > 0){
+					var index = (event.button == 0) ? tileIndex : 0;
+					var col   = (event.offsetX / tileWidth)  | 0;
+					var row   = (event.offsetY / tileHeight) | 0;
+					levelData[layerSelection.selectedIndex][row][col] = index;
+					renderLevel();
+				}
+				event.preventDefault();
+				return false;
+			};
+
+			canvas.onmousedown = function(event)
+			{
+				canvas.onmousemove = updateLevelData;
+				return updateLevelData(event);
+			};
+
+			canvas.onmouseup = function(event)
+			{
+				canvas.onmousemove = null;
+			};
+
+			canvas.oncontextmenu = function(event)
+			{
+				event.preventDefault();
+				return false;
+			};
+
+			var createNewLayer = function()
+			{
+				var layer = new Array(levelHeight);
+				for(var r = 0; r < levelHeight; r++){
+					layer[r] = newFilledArray(levelWidth, 0);
+				}
+				return layer;
+			};
+
+			var addNewLayer = function()
+			{
+				var layer = createNewLayer();
+				var newLayerIndex = (layerSelection.length > 0) ? 
+					layerSelection.selectedIndex + 1 : 0;
+				levelData.splice(newLayerIndex, 0, layer);
+				updateLayerSelector();
+				layerSelection.selectedIndex = newLayerIndex;
+				renderLevel();
+			};
+
+			var layerAdd = document.getElementById('layerAdd');
+			layerAdd.onclick = function(event)
+			{
+				addNewLayer();
+			};
+
+			var layerDel = document.getElementById('layerDel');
+			layerDel.onclick = function(event)
+			{
+				if(levelData != undefined && levelData.length > 0){
+					levelData.splice(layerSelection.selectedIndex, 1);
+					if(layerSelection.length > 0){
+						if(layerSelection.selectedIndex > 0){
+							layerSelection.selectedIndex--;
+						}else{
+							layerSelection.selectedIndex++;
+						}
+					}
+					updateLayerSelector();
+					renderLevel();
+				}
+			};
+
+			var updateLayerSelector = function()
+			{
+				var previousLength = layerSelection.length;
+				var previousLayer = layerSelection.selectedIndex;
+				while(layerSelection.firstChild){
+					layerSelection.removeChild(layerSelection.firstChild);
+				}
+				for(var l = 0; l < levelData.length; l++){
+					var layerOption = document.createElement('option');
+					layerOption.innerText = 'Layer ' + (l + 1);
+					layerSelection.appendChild(layerOption);
+				}
+				if(previousLength > 0 && previousLayer < levelData.length){
+					layerSelection.selectedIndex = previousLayer;
+				}
+			};
+
+			var gridLines = document.getElementById('gridLines');
+			gridLines.onchange = function(event)
+			{
+				drawGridLines = gridLines.checked;
+				renderLevel();
+			};
+
+			var gridText = document.getElementById('gridText');
+			gridText.onchange = function(event)
+			{
+				drawGridText = gridText.checked;
+				renderLevel();
+			};
+
+			var popupBackground = document.getElementById('popupBackground');
+			var popup           = document.getElementById('popup');
+			var popupTitle      = document.getElementById('popupTitle');
+			var popupAction     = document.getElementById('popupAction');
+			var popupCancel     = document.getElementById('popupCancel');
+			var popupContent    = document.getElementById('popupContent');
+			
+			var hidePopup = function(event)
+			{
+				if(event.keyCode == 27){
+					popupCancel.onclick();
+					document.removeEventListener('keydown', hidePopup);
+					event.preventDefault();
+					return false;
+				}
+			};
+
+			var showPopup = function(title, content, actionName, actionFunc)
+			{
+				popupTitle.innerText = title;
+				if(actionName != undefined){
+					popupAction.innerText = actionName;
+					popupAction.onclick   = function(event){
+						actionFunc(popupContent.value);
+						popupBackground.style.display = 'none';
+					};
+					popupAction.style.display = 'inline-block';
+				}else{
+					popupAction.style.display = 'none';
+				}
+				popupContent.value = content;
+				popupBackground.style.display  = 'flex';
+				popupContent.focus();
+				document.addEventListener('keydown', hidePopup);
+			};
+
+			popupCancel.onclick = function(event)
+			{
+				popupBackground.style.display = 'none';
+			};
+
+			var save = document.getElementById('save');
+			save.onclick = function(event)
+			{
+				var json = '[\n';
+				for(var l = 0; l < levelData.length; l++){
+					var layer = levelData[l];
+					if(layer == undefined) continue;
+					json += '\t[\n';
+					for(var r = 0; r < levelHeight; r++){
+						var row = layer[r];
+						if(row == undefined) continue;
+						json += '\t\t' + JSON.stringify(row);
+						json += (r + 1 < levelHeight) ? ',\n' : '\n';
+					}
+					json += (l + 1 < levelData.length) ? '\t],\n' : '\t]\n';
+				}
+				json += ']\n';
+				showPopup('Please copy the JSON below.', json);
+			};
+
+			var load = document.getElementById('load');
+			load.onclick = function(event)
+			{
+				showPopup('Please paste your JSON below.', '', 'Load', function(content){
+					levelData = JSON.parse(content);
+					updateLayerSelector();
+					renderLevel();
+				});
+			};
+
+			var clearMapData = function(event)
+			{
+				levelData = [];
+				addNewLayer();
+			};
+
+			var clear = document.getElementById('clear');
+			clear.onclick = function(event)
+			{
+				if(window.confirm('Are you sure you want to clear?')){
+					clearMapData();
+				}
+			};
+
+			var loadedPrevious = false;
+			if(window.localStorage){
+				var restoredData = undefined;
+				if(window.localStorage.getItem){
+					restoredData = window.localStorage.getItem('levelData');
+				}
+				if(restoredData != undefined){
+					try{
+						levelData = JSON.parse(restoredData);
+						updateLayerSelector();
+						renderLevel();
+						loadedPrevious = true;
+					}catch(e){
+						// ignored
+					}
+				}
+				if(window.localStorage.setItem){
+					window.onbeforeunload = function(event)
+					{
+						window.localStorage.setItem('levelData', JSON.stringify(levelData));
+					};
+				}
+			}
+			if(!loadedPrevious){
+				clearMapData();
+			}
+		};
+		</script>
+	</head>
+	<body>
+		<div id="menu">
+			<div id="controls">
+				<h1>Crystal Caves<br>Map Editor v1</h1>
+				<div class="controlsSection">
+					<button id="load">Load</button>&nbsp;
+					<button id="save">Save</button>&nbsp;
+					<button id="clear">Clear</button>
+				</div>
+				<div class="controlsSection">
+					<label><input id="gridLines" type="checkbox" checked> Grid Lines</label>
+					<label><input id="gridText"  type="checkbox" checked> Grid Text</label>
+				</div>
+				<div class="controlsSection">
+					<select id="layerSelection"></select>
+					<button id="layerAdd">&plus;</button>
+					<button id="layerDel">&minus;</button>
+				</div>
+			</div>
+			<div id="tiles">
+				<img id="tilesImage" src="../graphics/cc1-tiles.png">
+				<div id="tilesSelection"></div>
+			</div>
+		</div>
+		<div id="main"></div>
+		<div id="popupBackground">
+			<div id="popup">
+				<h2 id="popupTitle">Title</h2>
+				<div id="popupControls">
+					<button id="popupAction">Save</button>&nbsp;
+					<button id="popupCancel">Close</button>
+				</div><br>
+				<textarea id="popupContent"></textarea>
+			</div>
+		</div>
+	</body>
+</html>
