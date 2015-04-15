@@ -299,7 +299,9 @@ var Player = Sprite.extend(function()
 	this.render = function(game)
 	{
 		this.uber.render(game);
-		this.playerBounds.render(game);
+		if(this.debugEnabled){
+			this.playerBounds.render(game);
+		}
 	};
 
 	this.tileToPixel = function(game, pos)
