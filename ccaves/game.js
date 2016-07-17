@@ -8,7 +8,7 @@ var Game = Engine.extend(function()
 	this.constructor = function()
 	{
 		this.uber(320, 200, 2.90);
-		this.debugEnabled = true;
+		this.debugEnabled = false;
 		this.setImageTiles(this.loadImage('graphics/cc1-tiles.png'));
 		this.loadJSON('maps/map01.json'/*e1l04.json*/, this.levelLoaded);
 		this.start();
